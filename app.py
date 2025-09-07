@@ -4,25 +4,20 @@ import numpy as np
 import librosa
 import soundfile as sf
 import joblib
+import tensorflow as tf  # This is needed to load the .h5 model
 import parselmouth
 from parselmouth.praat import call
-import tflite_runtime.interpreter as tflite
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Load saved models and objects
-interpreter = tflite.Interpreter(model_path='crnn_model.tflite')
-interpreter.allocate_tensors()
+crnn_model = tf.keras.models.load_model('crnn_model.h5')
 rf_model = joblib.load('random_forest_model.joblib')
 scaler = joblib.load('audio_scaler.joblib')
 label_encoder = joblib.load('label_encoder.joblib')
 rf_feature_cols = joblib.load('rf_feature_columns.joblib')
-
-# Get input and output tensors.
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
 
 @app.route('/')
 def index():
@@ -102,12 +97,7 @@ def predict():
         pad_width = max_len - mel_spec_db.shape[1]
         mel_spec_db = np.pad(mel_spec_db, ((0,0),(0,pad_width)), mode='constant')
     X_crnn = np.expand_dims(mel_spec_db, axis=(0, 3))  # add batch and channel dims
-
-    # Run TFLite prediction
-    interpreter.set_tensor(input_details[0]['index'], X_crnn.astype(np.float32))
-    interpreter.invoke()
-    tflite_output = interpreter.get_tensor(output_details[0]['index'])
-    crnn_probs = tflite_output[0]
+    crnn_probs = crnn_model.predict(X_crnn)[0]
 
     # Ensemble averaging
     ensemble_probs = (rf_probs + crnn_probs) / 2.0
