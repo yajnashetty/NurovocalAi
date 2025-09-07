@@ -1,0 +1,10 @@
+# Python virtual environment
+venv/
+
+# Python compiled files
+__pycache__/
+*.pyc
+
+# Local project files
+uploads/
+final_fixed.ipynb
