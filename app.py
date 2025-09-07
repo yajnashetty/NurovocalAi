@@ -12,6 +12,7 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Load saved models and objects
 interpreter = tflite.Interpreter(model_path='crnn_model.tflite')
 interpreter.allocate_tensors()
 rf_model = joblib.load('random_forest_model.joblib')
@@ -19,6 +20,7 @@ scaler = joblib.load('audio_scaler.joblib')
 label_encoder = joblib.load('label_encoder.joblib')
 rf_feature_cols = joblib.load('rf_feature_columns.joblib')
 
+# Get input and output tensors.
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 
@@ -33,6 +35,7 @@ def predict():
     file = request.files['audio']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
+
     in_path = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(in_path)
 
