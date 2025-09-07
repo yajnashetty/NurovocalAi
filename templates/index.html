@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NeuroVocal AI - Voice Biomarker Classifier</title>
+    <style>
+      body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }
+      .container { max-width: 800px; margin: auto; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+      h2 { color: #4e79a7; text-align: center; margin-bottom: 25px; }
+      .section-box { margin-bottom: 25px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #fafafa; }
+      .button-group { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; }
+      button {
+          padding: 12px 25px;
+          font-size: 16px;
+          cursor: pointer;
+          border: none;
+          border-radius: 6px;
+          transition: background-color 0.3s ease, transform 0.2s ease;
+          color: white;
+      }
+      #start, #analyze { background-color: #4e79a7; }
+      #stop { background-color: #e15759; }
+      #upload-button { background-color: #76b7b2; }
+      button:disabled { background-color: #ccc; cursor: not-allowed; }
+      button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+      #audioPlayback { width: 100%; margin-top: 15px; }
+      #status { text-align: center; font-weight: bold; margin-top: 10px; color: #f28e2b; }
+      #result { text-align: center; margin-top: 20px; font-size: 1.2em; }
+      #passage-text { font-style: italic; line-height: 1.6; color: #555; text-align: justify; }
+      canvas { margin-top: 20px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h2>NeuroVocal AI: Voice Biomarker Classifier 🗣️</h2>
+        
+        <div class="section-box">
+            <h3>Instructions</h3>
+            <p>To begin, either record your voice while reading the passage below or upload an audio file. Then, click 'Analyze' to receive the results.</p>
+        </div>
+
+        <div class="section-box">
+            <h3>Passage to Read</h3>
+            <p id="passage-text">
+                "Please read the following passage clearly and at a normal pace: The sun in the sky shone down brightly, casting a warm glow over the rolling green hills. A gentle breeze rustled the leaves of the tall oak trees, and the birds sang a cheerful melody. It was a perfect day for a long walk in the park, enjoying the quiet beauty of nature."
+            </p>
+        </div>
+
+        <div class="section-box">
+            <div class="button-group">
+                <button id="start">Start Recording</button>
+                <button id="stop" disabled>Stop Recording</button>
+                <button id="upload-button">Upload Audio</button>
+                <input type="file" id="upload-audio" accept="audio/*" style="display: none;">
+            </div>
+            <p id="status"></p>
+            <audio id="audioPlayback" controls></audio>
+            <button id="analyze" disabled style="width: 100%; margin-top: 20px;">Analyze</button>
+        </div>
+        
+        <div id="result-section" class="section-box" style="display: none;">
+            <h3>Analysis Results</h3>
+            <div id="result"></div>
+            <canvas id="probChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder, audioChunks, uploadedFile = null;
+        let myChart;
+
+        // Handles the Start Recording button
+        document.getElementById("start").addEventListener("click", async () => {
+            document.getElementById("status").innerText = "Recording... Please read the passage.";
+            document.getElementById("audioPlayback").src = ""; // Clear previous audio
+            document.getElementById("result-section").style.display = "none";
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                    document.getElementById("audioPlayback").src = URL.createObjectURL(audioBlob);
+                    document.getElementById("analyze").disabled = false;
+                    document.getElementById("status").innerText = "Recording stopped. Ready for analysis.";
+                    uploadedFile = null;
+                };
+                mediaRecorder.start();
+                document.getElementById("start").disabled = true;
+                document.getElementById("stop").disabled = false;
+                document.getElementById("upload-button").disabled = true;
+            } catch (err) {
+                document.getElementById("status").innerText = "Error: " + err.message;
+            }
+        });
+
+        // Handles the Stop Recording button
+        document.getElementById("stop").addEventListener("click", () => {
+            mediaRecorder.stop();
+            document.getElementById("stop").disabled = true;
+            document.getElementById("start").disabled = false;
+            document.getElementById("upload-button").disabled = false;
+        });
+
+        // Handles the Upload Audio button and file input
+        document.getElementById("upload-button").addEventListener("click", () => {
+            document.getElementById("upload-audio").click();
+        });
+
+        document.getElementById("upload-audio").addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                uploadedFile = file;
+                document.getElementById("audioPlayback").src = URL.createObjectURL(file);
+                document.getElementById("analyze").disabled = false;
+                document.getElementById("status").innerText = `File selected: ${file.name}. Ready for analysis.`;
+                document.getElementById("start").disabled = true;
+                document.getElementById("stop").disabled = true;
+                document.getElementById("result-section").style.display = "none";
+            }
+        });
+
+        // Handles the Analyze button
+        document.getElementById("analyze").addEventListener("click", async () => {
+            let audioToAnalyze;
+            if (uploadedFile) {
+                audioToAnalyze = uploadedFile;
+            } else if (audioChunks && audioChunks.length > 0) {
+                audioToAnalyze = new Blob(audioChunks, { type: "audio/webm" });
+            } else {
+                document.getElementById("status").innerText = "Error: No audio to analyze. Please record or upload a file.";
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("audio", audioToAnalyze, uploadedFile ? uploadedFile.name : "recording.webm");
+
+            document.getElementById("status").innerText = "Analyzing...";
+            document.getElementById("analyze").disabled = true;
+
+            const response = await fetch("/predict", { method: "POST", body: formData });
+            const result = await response.json();
+
+            document.getElementById("analyze").disabled = false;
+            if (result.error) {
+                document.getElementById("status").innerText = "Error: " + result.error;
+                return;
+            }
+
+            const label = result.label;
+            const confidence = (result.confidence * 100).toFixed(1);
+            document.getElementById("status").innerText = "Analysis complete!";
+            document.getElementById("result-section").style.display = "block";
+            document.getElementById("result").innerHTML = 
+                `<p><strong>Prediction:</strong> ${label} (${confidence}% confidence)</p>`;
+
+            // Chart
+            const labels = Object.keys(result.probs);
+            const data = Object.values(result.probs).map(p => (p * 100).toFixed(1));
+            const ctx = document.getElementById("probChart").getContext("2d");
+
+            if (myChart) {
+                myChart.destroy();
+            }
+
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Probability (%)',
+                        data: data,
+                        backgroundColor: ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
