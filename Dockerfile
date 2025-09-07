@@ -1,20 +1,23 @@
-# Use a slim Python base image for a smaller final image size
-FROM python:3.9-slim
+# Set a specific Python base image version to ensure compatibility
+FROM python:3.11.0-slim
 
 # Set the working directory inside the container
 WORKDIR /app
 
-# Install system dependencies needed for librosa and pydub
+# Install system dependencies needed for libraries like librosa and pydub
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     libsndfile1 \
+    libblas3 \
+    libgfortran5 \
+    libopenblas-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all other project files, including your models
+# Copy all other project files, including your models and app.py
 COPY . .
 
 # Expose the port the app will run on
